@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Application Layer Simulator</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 0; padding: 0; background:#f5f5f5;}
+nav { background: #333; color: white; padding: 10px; text-align:center; }
+nav button { background:#444; color:white; border:none; padding:10px 20px; margin:0 5px; cursor:pointer; border-radius:5px;}
+nav button.active { background:#ff6600; }
+.view { display:none; padding:20px; }
+.view.active { display:block; }
+
+/* Simple View */
+.container { background: #fff; padding: 20px; border-radius: 10px; box-shadow:0 0 10px rgba(0,0,0,0.2); width:400px; margin:30px auto; text-align:center;}
+input, select, button { margin: 10px; padding: 10px; font-size: 14px; }
+#sender, #receiver { border: 2px dashed #444; padding: 20px; margin: 20px; border-radius: 10px; min-height: 50px; background:#fafafa; }
+
+/* Detailed View */
+#network { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; }
+.node { width: 150px; height: 150px; border: 2px solid #333; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-direction: column; background: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.2);}
+.packet { width: 120px; border: 2px solid #666; border-radius: 8px; background: #eee; margin:5px; padding:3px; font-size:12px; }
+.layer { margin:2px; padding:2px; border-radius:4px; background:#ddd; }
+#log { margin-top:20px; background:#111; color:#0f0; padding:10px; height:150px; overflow:auto; font-size:13px; border-radius:8px;}
+.controls { margin-top:15px; }
+.controls button { margin:5px; padding:8px 15px; border-radius:5px; border:none; background:#444; color:white; cursor:pointer;}
+.controls button:disabled { background:#999; cursor:not-allowed; }
+</style>
+</head>
+<body>
+
+<nav>
+  <button id="simpleBtn" class="active">Simple View</button>
+  <button id="detailedBtn">Detailed View</button>
+</nav>
+
+<!-- Simple View -->
+<div id="simpleView" class="view active">
+  <div class="container">
+    <h2>Simple Message Exchange</h2>
+    <input type="text" id="simpleMsg" placeholder="Enter message">
+    <br>
+    <select id="simpleProtocol">
+      <option value="HTTP">HTTP</option>
+      <option value="FTP">FTP</option>
+      <option value="SMTP">SMTP</option>
+    </select>
+    <select id="simpleTransport">
+      <option value="TCP">TCP</option>
+      <option value="UDP">UDP</option>
+    </select>
+    <br>
+    <button onclick="sendSimple()">Send</button>
+    <button onclick="goDetailed()">View Behind the Scenes</button>
+    <div id="sender">👩 Sender</div>
+    <div id="receiver">👨 Receiver</div>
+  </div>
+</div>
+
+<!-- Detailed View -->
+<div id="detailedView" class="view">
+  <h2>Detailed Packet Journey</h2>
+  <input type="text" id="detailedMsg" placeholder="Enter message">
+  <select id="detailedProtocol">
+    <option value="HTTP">HTTP</option>
+    <option value="FTP">FTP</option>
+    <option value="SMTP">SMTP</option>
+  </select>
+  <select id="detailedTransport">
+    <option value="TCP">TCP</option>
+    <option value="UDP">UDP</option>
+  </select>
+  <button onclick="prepareSimulation()">Prepare</button>
+
+  <div id="network">
+    <div class="node" id="client">👩 Sender</div>
+    <div class="node" id="router">📡 Router</div>
+    <div class="node" id="server">👨 Receiver</div>
+  </div>
+
+  <div id="log">[Log will appear here...]</div>
+
+  <div class="controls">
+    <button id="prevBtn" onclick="prevStep()" disabled>⬅ Previous</button>
+    <button id="nextBtn" onclick="nextStep()" disabled>Next ➡</button>
+  </div>
+</div>
+
+<script>
+/* ---------- Tab Switching ---------- */
+const simpleBtn = document.getElementById("simpleBtn");
+const detailedBtn = document.getElementById("detailedBtn");
+const simpleView = document.getElementById("simpleView");
+const detailedView = document.getElementById("detailedView");
+
+simpleBtn.onclick = () => {
+  simpleBtn.classList.add("active");
+  detailedBtn.classList.remove("active");
+  simpleView.classList.add("active");
+  detailedView.classList.remove("active");
+};
+
+detailedBtn.onclick = () => {
+  detailedBtn.classList.add("active");
+  simpleBtn.classList.remove("active");
+  detailedView.classList.add("active");
+  simpleView.classList.remove("active");
+};
+
+/* ---------- Simple View Logic ---------- */
+let lastMessage = "";
+let lastProtocol = "HTTP";
+let lastTransport = "TCP";
+
+function sendSimple() {
+  const msg = document.getElementById('simpleMsg').value;
+  lastProtocol = document.getElementById('simpleProtocol').value;
+  lastTransport = document.getElementById('simpleTransport').value;
+
+  if(msg.trim() === "") { alert("Enter a message!"); return; }
+
+  document.getElementById('sender').innerHTML = "👩 Sender: " + msg;
+  setTimeout(() => {
+    document.getElementById('receiver').innerHTML = "👨 Receiver: " + msg;
+  }, 1000);
+
+  lastMessage = msg;
+}
+
+function goDetailed() {
+  if(lastMessage.trim() === "") { alert("Send a message first!"); return; }
+  detailedBtn.click();
+  document.getElementById("detailedMsg").value = lastMessage;
+  document.getElementById("detailedProtocol").value = lastProtocol;
+  document.getElementById("detailedTransport").value = lastTransport;
+}
+
+/* ---------- Detailed Step-by-Step Simulation ---------- */
+let steps = [];
+let currentStep = -1;
+let packet = null;
+
+function logStep(msg) {
+  const log = document.getElementById("log");
+  log.innerHTML += "<br>" + msg;
+  log.scrollTop = log.scrollHeight;
+}
+
+function createPacket(message, protocol, transport, seq, ack, flags) {
+  let packet = document.createElement("div");
+  packet.className = "packet";
+  packet.innerHTML = `
+    <div class="layer">App: ${protocol} Data:${message}</div>
+    <div class="layer transport">Transport: ${transport} Seq:${seq} Ack:${ack} Flags:${flags}</div>
+    <div class="layer">Network: IP hdr</div>
+    <div class="layer">Link: MAC hdr</div>`;
+  return packet;
+}
+
+function prepareSimulation() {
+  document.getElementById("log").innerHTML = "[Prepared simulation. Click Next ➡]";
+  document.querySelectorAll(".packet").forEach(p=>p.remove());
+  currentStep = -1;
+
+  const message = document.getElementById("detailedMsg").value;
+  const protocol = document.getElementById("detailedProtocol").value;
+  const transport = document.getElementById("detailedTransport").value;
+
+  if(message.trim()===""){ alert("Enter message"); return; }
+
+  let client = document.getElementById("client");
+  let router = document.getElementById("router");
+  let server = document.getElementById("server");
+
+  let seq = 1000;
+  let ack = 0;
+
+  packet = createPacket(message, protocol, transport, seq, ack, "SYN");
+
+  // Steps as functions
+  steps = [
+    ()=>{ client.appendChild(packet); logStep("App Layer: User data prepared."); },
+    ()=>{ logStep(`Transport Layer: Seq=${seq}, Flags=SYN`); },
+    ()=>{ router.appendChild(packet); logStep("Packet moved to Router."); },
+    ()=>{ server.appendChild(packet); logStep("Packet reached Receiver."); },
+    ()=>{ seq += message.length; ack = seq+1;
+          packet.querySelector(".transport").innerHTML = `Transport: ${transport} Seq:${seq} Ack:${ack} Flags:ACK`;
+          logStep(`Receiver processed packet. Seq=${seq}, Ack=${ack}, Flags=ACK`); },
+    ()=>{ logStep("Simulation Complete ✅"); }
+  ];
+
+  document.getElementById("nextBtn").disabled = false;
+  document.getElementById("prevBtn").disabled = true;
+}
+
+function nextStep() {
+  if(currentStep < steps.length-1) {
+    currentStep++;
+    steps[currentStep]();
+  }
+  if(currentStep === steps.length-1) document.getElementById("nextBtn").disabled = true;
+  document.getElementById("prevBtn").disabled = (currentStep<=0);
+}
+
+function prevStep() {
+  if(currentStep > 0) {
+    // Reset and replay until previous step
+    document.getElementById("log").innerHTML = "[Rewinding...]";
+    document.querySelectorAll(".packet").forEach(p=>p.remove());
+    currentStep = -1;
+    for(let i=0;i<arguments.callee.caller.caller.length;i++){}
+    for(let i=0;i<steps.length;i++){
+      if(i<currentStep) steps[i]();
+    }
+  }
+  document.getElementById("prevBtn").disabled = (currentStep<=0);
+  document.getElementById("nextBtn").disabled = false;
+}
+</script>
+</body>
+</html>
